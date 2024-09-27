@@ -1,3 +1,8 @@
+library(readxl)
+library(tidyverse)
+library(googledrive)
+library(googlesheets4)
+
 flora_fauna_drive_path <- "https://drive.google.com/drive/u/0/folders/1QF1kvNglqZQC7sjJ1ryHRbzB4XMzgvfH"
 
 # Created Drive file:
@@ -24,16 +29,23 @@ flora_fauna_drive_path <- "https://drive.google.com/drive/u/0/folders/1QF1kvNglq
 #   • application/vnd.google-apps.spreadsheet
 # verb_sheet_id <- "11sV_Iaw8OECur_SP3NsctFPRxSTyGRffZZ2YQ_7bYTE"
 
+# Store the list of files and directories inside the flora and fauna directory
 flora_fauna_drive <- drive_ls(path = as_id("https://drive.google.com/drive/u/0/folders/1QF1kvNglqZQC7sjJ1ryHRbzB4XMzgvfH"))
 
+# List the files inside the flora picture directory
 flora_picts <- drive_ls(path = as_id("https://drive.google.com/drive/u/0/folders/1u31JkgLzssdC24LxXN1Vy2eL281scLDx"))
 
+# Pre-processing the naming of some of the files
 flora_picts1 <- flora_picts |> 
+  
+  # Create the Google Drive URL for each file based on the numeric id
   mutate(url = paste("https://drive.google.com/file/d/", id, "/view", sep = "" )) |> 
-  mutate(photo_numeric_name = if_else(str_detect(name, "^[0-9 \\(\\)]+\\.(JPG|jpg|jpeg)$"),
+  
+  # Check if the file is named using number or not
+  mutate(photo_numeric_name = if_else(str_detect(name, "^[0-9 \\(\\)]+\\.(JPG|jpg|jpeg|png|PNG)$"),
                                       TRUE,
                                       FALSE)) |> 
-  mutate(name2 = str_replace(name, "\\.(jpe?g|JPG)$", "")) |> 
+  mutate(name2 = str_replace(name, "\\.(jpe?g|JPG|png|PNG)$", "")) |> 
   mutate(name2 = replace(name2,
                          name2 == "ku pi",
                          "142"),
@@ -67,12 +79,18 @@ flora_picts1 <- flora_picts |>
 # Linked Directory path:
 linked_dir <- "C:/ProgramData/SIL/FieldWorks/Projects/flora-fauna/LinkedFiles"
 
-# The following code needs to be re-run whenever there is update from Dendi
-# fs::dir_copy("flora_photo", "C:/ProgramData/SIL/FieldWorks/Projects/flora-fauna/LinkedFiles")
+# IMPORTANT: The following code needs to be re-run whenever there is photo update from Dendi
+# If there is any cropping in the FLEx directly, first copy the crop/edited photos in "C:\ProgramData\SIL\FieldWorks\Projects\flora-fauna\LinkedFiles\Pictures" to the Google Drive folder and rename the edited photo in the Google Drive with "_...".
+# fs::dir_delete("C:/ProgramData/SIL/FieldWorks/Projects/flora-fauna/LinkedFiles/flora_photo")
+# fs::dir_delete("C:/ProgramData/SIL/FieldWorks/Projects/flora-fauna/LinkedFiles/Pictures")
+# fs::dir_copy("flora_photo", "C:/ProgramData/SIL/FieldWorks/Projects/flora-fauna/LinkedFiles/flora_photo", overwrite = TRUE)
+# IMPORTANT: Delete one of the Bougenville entries/photos
 
-
+# Read the G Sheet containing the lexicon of the flora
 flora_df <- read_sheet(flora_fauna_drive[flora_fauna_drive$name == "flora_with_picture", ][["id"]]) |> 
-  mutate(NO = as.character(NO))
+  mutate(NO = as.character(NO)) |> 
+  filter(!ENGLISH %in% c("jellyfish", "handle", "arranged coral", "fish bone"),
+         NO != "138")
 
 flora_df1 <- flora_df |> 
   left_join(flora_picts1 |> 
@@ -80,6 +98,8 @@ flora_df1 <- flora_df |>
               select(NO, url, name)) |> 
   mutate(name = replace_na(name, ""))
 
+## Check the number of absent photos
+flora_df1 |> filter(is.na(url))
 
 
 # Turn into SFM file ====
@@ -87,8 +107,8 @@ flora_df1 |>
   rowwise() |> 
   mutate(lx = list(paste0("\\lx ", 
                          ENGGANO, 
-                         "\n__\\ph ", 
-                         str_replace_all(str_replace_all(PHONEME, "\\/", ""), "ʔ", "ˀ"), 
+                         # "\n__\\ph ", 
+                         # str_replace_all(str_replace_all(PHONEME, "\\/", ""), "ʔ", "ˀ"), 
                          "\n__\\ps ", 
                          POS, 
                          "\n__\\gn ", 
@@ -108,4 +128,4 @@ flora_df1 |>
   unlist() |> 
   str_replace_all("NA", " ") |> 
   str_replace_all("\\\\pc C\\:.+LinkedFiles\\/flora_photo\\/\\n", "") |> 
-  write_lines("flora-sfm.db")
+  write_lines("flora-sfm-20240928.db")
