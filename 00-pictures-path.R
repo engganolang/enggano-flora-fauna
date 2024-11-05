@@ -3,6 +3,20 @@ library(tidyverse)
 library(googledrive)
 library(googlesheets4)
 
+# VERY IMPORTANT NOTES
+# everytime finishing exporting the spreadsheet into SFM, always check lexicons that have more than one meaning (polysemous) in the spreadsheet
+#   - esp. check "pururu" that appears in fauna and flora
+#   - esp. check "are'iar" in fauna
+# then, re-organise the sfm entry for these polysemous items in the exported .db SFM file.
+# the re-organisation needs to follow the format of SFM import whereby the second sense is started with \ps
+# do this for flora and fauna
+# only after this re-organisation then the sfm .db will be imported into FLEx
+# STEPS TO DO THAT:
+# 1. Open the spreadsheet for either flora and fauna
+# 2. Open one of the files named "flora/fauna-sfm-YYYYMMDD.db"
+# 3. Go to the spreadsheet and filter under SENSE_ID column the non-blank cells
+# 4. Go go the .db textfile and bring the other sense of the item under the same SFM entry where each sense is marked with \ps
+
 flora_fauna_drive_path <- "https://drive.google.com/drive/u/0/folders/1QF1kvNglqZQC7sjJ1ryHRbzB4XMzgvfH"
 
 # Created Drive file:
@@ -94,10 +108,15 @@ fauna_picts1 <- fauna_picts |>
 linked_dir <- "C:/ProgramData/SIL/FieldWorks/Projects/flora-fauna/LinkedFiles"
 
 # IMPORTANT: The following code needs to be re-run whenever there is photo update from Dendi
-# If there is any cropping in the FLEx directly, first copy the crop/edited photos in "C:\ProgramData\SIL\FieldWorks\Projects\flora-fauna\LinkedFiles\Pictures" to the Google Drive folder and rename the edited photo in the Google Drive with "_...".
+# If there is any cropping in the FLEx directly, first copy the crop/edited photos in/from "C:\ProgramData\SIL\FieldWorks\Projects\flora-fauna\LinkedFiles" to the Google Drive folder and rename the edited photo in the Google Drive with "_...".
 # fs::dir_delete("C:/ProgramData/SIL/FieldWorks/Projects/flora-fauna/LinkedFiles/flora_photo")
+# fs::dir_delete("C:/ProgramData/SIL/FieldWorks/Projects/flora-fauna/LinkedFiles/fauna_photo")
 # fs::dir_delete("C:/ProgramData/SIL/FieldWorks/Projects/flora-fauna/LinkedFiles/Pictures")
+
+## The code below copies the photos from flora directory in Google Drive into the FLEx Flora Fauna project directory for the linked picture files
 # fs::dir_copy("flora_photo", "C:/ProgramData/SIL/FieldWorks/Projects/flora-fauna/LinkedFiles/flora_photo", overwrite = TRUE)
+
+## The code below copies the photos from fauna directory in Google Drive into the FLEx Flora Fauna project directory for the linked picture files
 # fs::dir_copy("fauna_photo", "C:/ProgramData/SIL/FieldWorks/Projects/flora-fauna/LinkedFiles/fauna_photo", overwrite = TRUE)
 # IMPORTANT: Delete one of the Bougenville entries/photos
 
@@ -105,7 +124,10 @@ linked_dir <- "C:/ProgramData/SIL/FieldWorks/Projects/flora-fauna/LinkedFiles"
 ## FLORA spreadsheet =====
 flora_df <- read_sheet(flora_fauna_drive[flora_fauna_drive$name == "flora_with_picture", ][["id"]]) |> 
   mutate(NO = as.character(NO)) |> 
-  filter(!ENGLISH %in% c("jellyfish", "handle", "arranged coral", "fish bone"),
+  filter(!ENGLISH %in% c("jellyfish", 
+                         #"handle", 
+                         "arranged coral", 
+                         "fish bone"),
          NO != "138",
          NO != "100",
          NO != "60",
@@ -130,7 +152,8 @@ fauna_df <- read_sheet(flora_fauna_drive[flora_fauna_drive$name == "fauna", ][["
   mutate(NOTES_EN = replace_na(NOTES_EN, ""),
          NOTES_ID = replace_na(NOTES_ID, "")) |> 
   filter(NOTES_EN != "NOT FAUNA",
-         NOTES_EN != "DUPLICATE")
+         NOTES_EN != "DUPLICATE",
+         NO != "1")
 fauna_df
 
 fauna_df1 <- fauna_df |> 
@@ -182,9 +205,9 @@ flora_df1 |>
   unlist() |> 
   str_replace_all("NA", " ") |> 
   str_replace_all("\\\\pc C\\:.+LinkedFiles\\/flora_photo\\/\\n", "") |> 
-  write_lines("flora-sfm-20240928.db")
+  write_lines("flora-sfm-20241105.db")
 
-## FAUNS ====
+## FAUNAS ====
 fauna_df1 |> 
   rowwise() |> 
   mutate(lx = list(paste0("\\lx ", 
@@ -216,13 +239,13 @@ fauna_df1 |>
   unlist() |> 
   str_replace_all("NA", " ") |> 
   str_replace_all("\\\\pc C\\:.+LinkedFiles\\/fauna_photo\\/\\n", "") |> 
-  write_lines("fauna-sfm-20240928.db")
+  write_lines("fauna-sfm-20241105.db")
 
 # Combined the data for Flora and Fauna for Pak Cok's team ==========
 flora_df1 |> 
-  select(category, NO, ENGGANO, POS, PHONEME, SENSE_ID, CROSSREF, INDONESIAN, ENGLISH, NOTES, url, name) |> 
+  select(category, NO, ENGGANO, POS, PHONEME, SENSE_ID, CROSSREF, INDONESIAN, ENGLISH, NOTES_EN, NOTES_ID, url, name) |> 
   bind_rows(fauna_df1 |> 
-              select(category, NO, ENGGANO, POS, PHONEME, CROSSREF, INDONESIAN, ENGLISH, NOTES, url, name))
+              select(category, NO, ENGGANO, POS, PHONEME, CROSSREF, INDONESIAN, ENGLISH, NOTES_EN, NOTES_ID, url, name))
 
 
 read_lines("flora-fauna-export-from-FLEx-20240928.db") |> 
