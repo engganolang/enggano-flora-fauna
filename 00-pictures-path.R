@@ -7,6 +7,8 @@ library(googlesheets4)
 # everytime finishing exporting the spreadsheet into SFM, always check lexicons that have more than one meaning (polysemous) in the spreadsheet
 #   - esp. check "pururu" that appears in fauna and flora
 #   - esp. check "are'iar" in fauna
+#   - esp. check words for "kepiting" (ẽũk kiėhėr)
+#   - esp. check words for "skin" (iuk kane)
 # then, re-organise the sfm entry for these polysemous items in the exported .db SFM file.
 # the re-organisation needs to follow the format of SFM import whereby the second sense is started with \ps
 # do this for flora and fauna
@@ -108,30 +110,49 @@ fauna_picts1 <- fauna_picts |>
 linked_dir <- "C:/ProgramData/SIL/FieldWorks/Projects/flora-fauna/LinkedFiles"
 
 # IMPORTANT: The following code needs to be re-run whenever there is photo update from Dendi
-# If there is any cropping in the FLEx directly, first copy the crop/edited photos in/from "C:\ProgramData\SIL\FieldWorks\Projects\flora-fauna\LinkedFiles" to the Google Drive folder and rename the edited photo in the Google Drive with "_...".
+# If there is any cropping in the FLEx directly, first copy the crop/edited photos in/from "C:\ProgramData\SIL\FieldWorks\Projects\flora-fauna\LinkedFiles\Pictures" to the Google Drive folder and rename the edited photo in the Google Drive with "_...".
+# OR IF THERE IS ANY NEW FOTO, COPY DIRECTLY TO "C:\ProgramData\SIL\FieldWorks\Projects\flora-fauna\LinkedFiles"
 # fs::dir_delete("C:/ProgramData/SIL/FieldWorks/Projects/flora-fauna/LinkedFiles/flora_photo")
 # fs::dir_delete("C:/ProgramData/SIL/FieldWorks/Projects/flora-fauna/LinkedFiles/fauna_photo")
 # fs::dir_delete("C:/ProgramData/SIL/FieldWorks/Projects/flora-fauna/LinkedFiles/Pictures")
 
 ## The code below copies the photos from flora directory in Google Drive into the FLEx Flora Fauna project directory for the linked picture files
+# cp -r flora_photo C:/ProgramData/SIL/FieldWorks/Projects/flora-fauna/LinkedFiles/flora_photo <- FASTER
 # fs::dir_copy("flora_photo", "C:/ProgramData/SIL/FieldWorks/Projects/flora-fauna/LinkedFiles/flora_photo", overwrite = TRUE)
 
+## The code below rename files to ensure no ` (...)` marker is present in the file name
+flora_filenames <- list.files(path = "C:/ProgramData/SIL/FieldWorks/Projects/flora-fauna/LinkedFiles/flora_photo", full.names = TRUE)
+any(str_detect(flora_filenames, "\\("))
+sapply(flora_filenames, FUN = function(eachPath) file.rename(from = eachPath, to = str_replace_all(eachPath, "\\s+\\(\\d+\\)", "")))
+flora_filenames_new <- list.files(path = "C:/ProgramData/SIL/FieldWorks/Projects/flora-fauna/LinkedFiles/flora_photo", full.names = TRUE)
+all(str_detect(flora_filenames_new, "\\("))
+
 ## The code below copies the photos from fauna directory in Google Drive into the FLEx Flora Fauna project directory for the linked picture files
+# cp -r fauna_photo C:/ProgramData/SIL/FieldWorks/Projects/flora-fauna/LinkedFiles/fauna_photo
 # fs::dir_copy("fauna_photo", "C:/ProgramData/SIL/FieldWorks/Projects/flora-fauna/LinkedFiles/fauna_photo", overwrite = TRUE)
 # IMPORTANT: Delete one of the Bougenville entries/photos
+fauna_filenames <- list.files(path = "C:/ProgramData/SIL/FieldWorks/Projects/flora-fauna/LinkedFiles/fauna_photo", full.names = TRUE)
+any(str_detect(fauna_filenames, "\\(")) # check if "(...)" is in the file name
+sapply(fauna_filenames, FUN = function(eachPath) file.rename(from = eachPath, to = str_replace_all(eachPath, "\\s+\\(\\d+\\)", "")))
+fauna_filenames_new <- list.files(path = "C:/ProgramData/SIL/FieldWorks/Projects/flora-fauna/LinkedFiles/fauna_photo", full.names = TRUE)
+all(str_detect(fauna_filenames_new, "\\(")) # check if "(...)" is in the file name after renaming
+
 
 # Read the G Sheet containing the lexicon of the flora and fauna =====
 ## FLORA spreadsheet =====
 flora_df <- read_sheet(flora_fauna_drive[flora_fauna_drive$name == "flora_with_picture", ][["id"]]) |> 
   mutate(NO = as.character(NO)) |> 
+  filter(is.na(INCLUDE)) |> 
   filter(!ENGLISH %in% c("jellyfish", 
                          #"handle", 
-                         "arranged coral", 
+                         # "arranged coral", 
                          "fish bone"),
          NO != "138",
+         NO != "113",
          NO != "100",
          NO != "60",
-         NO != "73") # |> 
+         NO != "95", # a verb, already in FLEx
+         NO != "73") # |> # duplicate for 74
   # separate_longer_delim(SUBENTRY, "\n")
   # mutate(SUBENTRY = str_replace_all(SUBENTRY, "\\\n", "\n__\\\\se "))
 
@@ -140,11 +161,17 @@ flora_df1 <- flora_df |>
               rename(NO = name2) |> 
               select(NO, url, name)) |> 
   mutate(name = replace_na(name, ""),
-         category = "flora")
+         category = "flora") |> 
+  mutate(pc = if_else(name != "", paste0(linked_dir, "/flora_photo/", name, sep = ""), ""))
 
 ## Check the number of absent photos
 flora_df1 |> filter(is.na(url))
 flora_df1 |> filter(!is.na(url))
+write_rds(flora_df1, "flora_df1.rds")
+
+## Get the working directory of "flora_df1.rds"
+str_c(getwd(), "/", dir(pattern="flora_df1.rds"), sep = "")
+# "G:/.shortcut-targets-by-id/1MO3Q9KZIODxlfPRyjLTtDUZuVkecFBp6/Enggano/enggano-dictionary/flora-fauna/flora_df1.rds"
 
 ## FAUNA spreadsheet =====
 fauna_df <- read_sheet(flora_fauna_drive[flora_fauna_drive$name == "fauna", ][["id"]]) |> 
@@ -153,7 +180,11 @@ fauna_df <- read_sheet(flora_fauna_drive[flora_fauna_drive$name == "fauna", ][["
          NOTES_ID = replace_na(NOTES_ID, "")) |> 
   filter(NOTES_EN != "NOT FAUNA",
          NOTES_EN != "DUPLICATE",
-         NO != "1")
+         NO != "1",
+         NO != "52", # already handle in FLORA data
+         NO != "46" # not sure what hėkė' 'lokan' is actually
+         ) |> 
+  filter(is.na(INCLUDE))
 fauna_df
 
 fauna_df1 <- fauna_df |> 
@@ -161,32 +192,209 @@ fauna_df1 <- fauna_df |>
               rename(NO = name2) |> 
               select(NO, url, name)) |> 
   mutate(name = replace_na(name, ""),
-         category = "fauna")
+         category = "fauna") |> 
+  mutate(pc = if_else(name != "", paste0(linked_dir, "/fauna_photo/", name, sep = ""), ""))
 fauna_df1
 
 ## Check the number of absent photos
 fauna_df1 |> filter(is.na(url))
+fauna_df1 |> filter(is.na(IMAGE))
 fauna_df1 |> filter(!is.na(url))
+fauna_df1 |> filter(!is.na(IMAGE))
+write_rds(fauna_df1, "fauna_df1.rds")
 
-# Turn into SFM file ====
+## Get the working directory of "fauna_df1.rds"
+str_c(getwd(), "/", dir(pattern="fauna_df1.rds"), sep = "")
+# "G:/.shortcut-targets-by-id/1MO3Q9KZIODxlfPRyjLTtDUZuVkecFBp6/Enggano/enggano-dictionary/flora-fauna/fauna_df1.rds"
+
+# Turn into SFM file (NEW with sub-entries coded) ====
 ## FLORA ====
-flora_df1 |> 
-  rowwise() |> 
-  mutate(lx = list(paste0("\\lx ", 
+### Combine the subentries element into long SFM
+se_flora <- flora_df1 |> 
+  filter(!is.na(MAIN_ENTRY)) |> # retrieve rows that contain info on the root in the MAIN_ENTRY column
+  select(-SENSE_ID, -VARIANT_PHONEME, -GAMBAR, -URL) |> 
+  mutate(across(matches("VARIANT|CROSSREF|NOTES_EN|NOTES_ID"), ~replace_na(., " "))) |> 
+  group_by(MAIN_ENTRY, MAIN_ENTRY_EN, MAIN_ENTRY_IDN) |> 
+  mutate(SUBENTRY = paste0("\\se ", ENGGANO, 
+                           "\n__\\cf ", CROSSREF, 
+                           "\n__\\va ", VARIANT, 
+                           "\n__\\ps ", POS, 
+                           "\n__\\gn ", INDONESIAN, 
+                           "\n__\\ge ", ENGLISH, 
+                           "\n__\\pc ", if_else(name != "", paste0(linked_dir, "/flora_photo/", name, sep = ""), ""),
+                           "\n__\\nt_en ", NOTES_EN,
+                           "\n__\\nt_id ", NOTES_ID,
+                           sep = "")) |> 
+  select(ENGGANO = MAIN_ENTRY,
+         INDONESIAN = MAIN_ENTRY_IDN,
+         ENGLISH = MAIN_ENTRY_EN,
+         SUBENTRY) |> 
+  mutate(SUBENTRY2 = paste0(SUBENTRY, collapse = "\n__")) |> 
+  select(-SUBENTRY) |> 
+  rename(SUBENTRY = SUBENTRY2) |> 
+  distinct()
+
+### Combine the long SFM subentries with the other lexemes and their roots
+lx_flora <- flora_df1 |> 
+  filter(is.na(MAIN_ENTRY)) |> # retrieve rows that contain info on the root in the MAIN_ENTRY column
+  select(-VARIANT_PHONEME, -GAMBAR, -URL, -matches("^MAIN_EN")) |> 
+  mutate(across(matches("VARIANT|CROSSREF|NOTES_EN|NOTES_ID"), ~replace_na(., " "))) |> 
+  mutate(SENSE_ID = if_else(is.na(SENSE_ID), "0", str_replace_all(SENSE_ID, "^[^_]+_+", ""))) |> 
+  mutate(SENSE_ID = replace(SENSE_ID, ENGGANO == "kė'ėh", "0")) |> 
+  mutate(MULTISENSE = if_else(SENSE_ID != "0", TRUE, FALSE)) |> 
+  left_join(se_flora) # joining the SUBENTRY subset of the flora lexicon processed above
+lx_flora_single_sense <- lx_flora |> 
+  filter(!MULTISENSE) |> 
+  mutate(LX = paste0("\\lx ", ENGGANO, 
+                     "\n__\\cf ", CROSSREF, 
+                     "\n__\\va ", VARIANT, 
+                     "\n__\\ps ", POS, 
+                     "\n__\\gn ", INDONESIAN, 
+                     "\n__\\ge ", ENGLISH, 
+                     "\n__\\pc ", if_else(name != "", paste0(linked_dir, "/flora_photo/", name, sep = ""), ""),
+                     "\n__\\nt_en ", NOTES_EN,
+                     "\n__\\nt_id ", NOTES_ID,
+                     sep = "")) |> 
+  mutate(SFM = if_else(is.na(SUBENTRY),
+                       paste(LX, "\n", sep = ""),
+                       paste(LX, "\n__", SUBENTRY, "\n", sep = ""))) |> 
+  select(SFM)
+lx_flora_multisense <- lx_flora |> # Picture for multiple sense lexeme needs to be added manually to not mess with the code
+  filter(MULTISENSE) |> 
+  pivot_longer(cols = c(INDONESIAN, ENGLISH), 
+               names_to = "LANG", 
+               values_to = "GLOSS") |> 
+  pivot_wider(id_cols = -NO, 
+              names_from = c(LANG, SENSE_ID), 
+              names_glue = "{LANG}_{SENSE_ID}", 
+              values_from = c(GLOSS)) |> 
+  mutate(LX = paste0("\\lx ", ENGGANO, 
+                     "\n__\\cf ", CROSSREF, 
+                     "\n__\\va ", VARIANT, 
+                     "\n__\\ps ", POS, 
+                     "\n__\\gn ", INDONESIAN_1, 
+                     "\n__\\ge ", ENGLISH_1, 
+                     "\n__\\ps ", POS, 
+                     "\n__\\gn ", INDONESIAN_2, 
+                     "\n__\\ge ", ENGLISH_2,
+                     "\n__\\nt_en ", NOTES_EN,
+                     "\n__\\nt_id ", NOTES_ID,
+                     "\n\n",
+                     sep = "")) |> 
+  mutate(SFM = if_else(is.na(SUBENTRY),
+                       paste(LX, "\n", sep = ""),
+                       paste(LX, "\n__", SUBENTRY, "\n", sep = ""))) |> 
+  select(SFM)
+lx_flora_sfm <- bind_rows(lx_flora_single_sense, lx_flora_multisense) |> 
+  mutate(SFM = str_replace_all(SFM, "\\\\pc C\\:.+LinkedFiles\\/flora_photo\\/\\n", ""),
+         SFM = str_replace_all(SFM, "_{2}", "")) |> 
+  pull(SFM)
+lx_flora_sfm |> write_lines("flora-sfm-20241110.db")
+
+
+## FAUNA ====
+### Combine the subentries element into long SFM
+se_fauna <- fauna_df1 |> 
+  filter(!is.na(MAIN_ENTRY)) |> # retrieve rows that contain info on the root in the MAIN_ENTRY column
+  select(-SENSE_ID, -VARIANT_PHONEME, -IMAGE, -url) |> 
+  mutate(across(matches("VARIANT|CROSSREF|NOTES_EN|NOTES_ID"), ~replace_na(., " "))) |> 
+  group_by(MAIN_ENTRY, MAIN_ENTRY_EN, MAIN_ENTRY_IDN) |> 
+  mutate(SUBENTRY = paste0("\\se ", ENGGANO, 
+                           "\n__\\cf ", CROSSREF, 
+                           "\n__\\va ", VARIANT, 
+                           "\n__\\ps ", POS, 
+                           "\n__\\gn ", INDONESIAN, 
+                           "\n__\\ge ", ENGLISH, 
+                           "\n__\\pc ", if_else(name != "", paste0(linked_dir, "/fauna_photo/", name, sep = ""), ""),
+                           "\n__\\nt_en ", NOTES_EN,
+                           "\n__\\nt_id ", NOTES_ID,
+                           sep = "")) |> 
+  select(ENGGANO = MAIN_ENTRY,
+         INDONESIAN = MAIN_ENTRY_IDN,
+         ENGLISH = MAIN_ENTRY_EN,
+         SUBENTRY) |> 
+  mutate(SUBENTRY2 = paste0(SUBENTRY, collapse = "\n__")) |> 
+  select(-SUBENTRY) |> 
+  rename(SUBENTRY = SUBENTRY2) |> 
+  distinct()
+
+### Combine the long SFM subentries with the other lexemes and their roots
+lx_fauna <- fauna_df1 |> 
+  filter(is.na(MAIN_ENTRY)) |> # retrieve rows that contain info on the root in the MAIN_ENTRY column
+  select(-VARIANT_PHONEME, -IMAGE, -url, -matches("^MAIN_EN")) |> 
+  mutate(across(matches("VARIANT|CROSSREF|NOTES_EN|NOTES_ID"), ~replace_na(., " "))) |> 
+  mutate(SENSE_ID = if_else(is.na(SENSE_ID), "0", str_replace_all(SENSE_ID, "^[^_]+_+", ""))) |> 
+  mutate(SENSE_ID = replace(SENSE_ID, ENGGANO == "kė'ėh", "0")) |> 
+  mutate(MULTISENSE = if_else(SENSE_ID != "0", TRUE, FALSE)) |> 
+  left_join(se_fauna) # joining the SUBENTRY subset of the fauna lexicon processed above
+lx_fauna_single_sense <- lx_fauna |> 
+  filter(!MULTISENSE) |> 
+  mutate(LX = paste0("\\lx ", ENGGANO, 
+                     "\n__\\cf ", CROSSREF, 
+                     "\n__\\va ", VARIANT, 
+                     "\n__\\ps ", POS, 
+                     "\n__\\gn ", INDONESIAN, 
+                     "\n__\\ge ", ENGLISH, 
+                     "\n__\\pc ", if_else(name != "", paste0(linked_dir, "/fauna_photo/", name, sep = ""), ""),
+                     "\n__\\nt_en ", NOTES_EN,
+                     "\n__\\nt_id ", NOTES_ID,
+                     sep = "")) |> 
+  mutate(SFM = if_else(is.na(SUBENTRY),
+                       paste(LX, "\n", sep = ""),
+                       paste(LX, "\n__", SUBENTRY, "\n", sep = ""))) |> 
+  select(SFM)
+lx_fauna_multisense <- lx_fauna |> # Picture for multiple sense lexeme needs to be added manually to not mess with the code
+  filter(MULTISENSE) |> 
+  pivot_longer(cols = c(INDONESIAN, ENGLISH), 
+               names_to = "LANG", 
+               values_to = "GLOSS") |> 
+  pivot_wider(id_cols = -NO, 
+              names_from = c(LANG, SENSE_ID), 
+              names_glue = "{LANG}_{SENSE_ID}", 
+              values_from = c(GLOSS)) |> 
+  mutate(LX = paste0("\\lx ", ENGGANO, 
+                     "\n__\\cf ", CROSSREF, 
+                     "\n__\\va ", VARIANT, 
+                     "\n__\\ps ", POS, 
+                     "\n__\\gn ", INDONESIAN_1, 
+                     "\n__\\ge ", ENGLISH_1, 
+                     "\n__\\ps ", POS, 
+                     "\n__\\gn ", INDONESIAN_2, 
+                     "\n__\\ge ", ENGLISH_2,
+                     "\n__\\nt_en ", NOTES_EN,
+                     "\n__\\nt_id ", NOTES_ID,
+                     "\n\n",
+                     sep = "")) |> 
+  mutate(SFM = if_else(is.na(SUBENTRY),
+                       paste(LX, "\n", sep = ""),
+                       paste(LX, "\n__", SUBENTRY, "\n", sep = ""))) |> 
+  select(SFM)
+lx_fauna_sfm <- bind_rows(lx_fauna_single_sense, lx_fauna_multisense) |> 
+  mutate(SFM = str_replace_all(SFM, "\\\\pc C\\:.+LinkedFiles\\/fauna_photo\\/\\n", ""),
+         SFM = str_replace_all(SFM, "_{2}", "")) |> 
+  pull(SFM)
+lx_fauna_sfm |> write_lines("fauna-sfm-20241110.db")
+
+
+# Turn into SFM file (OLD) ====
+## FLORA ====
+flora_df1 |>
+  rowwise() |>
+  mutate(lx = list(paste0("\\lx ",
                          ENGGANO,
                          # "\n__\\mn ",
                          # MAIN_ENTRY,
                          "\n__\\cf ",
                          CROSSREF,
-                         # "\n__\\ph ", 
-                         # str_replace_all(str_replace_all(PHONEME, "\\/", ""), "ʔ", "ˀ"), 
+                         # "\n__\\ph ",
+                         # str_replace_all(str_replace_all(PHONEME, "\\/", ""), "ʔ", "ˀ"),
                          "\n__\\va ",
                          VARIANT,
-                         "\n__\\ps ", 
-                         POS, 
-                         "\n__\\gn ", 
-                         INDONESIAN, 
-                         "\n__\\ge ", 
+                         "\n__\\ps ",
+                         POS,
+                         "\n__\\gn ",
+                         INDONESIAN,
+                         "\n__\\ge ",
                          ENGLISH,
                          "\n__\\pc ",
                          paste0(linked_dir, "/flora_photo/", name, sep = ""),
@@ -197,32 +405,32 @@ flora_df1 |>
                          #"\n__\\se ",
                          #SUBENTRY,
                          "\n",
-                         sep = ""))) |> 
-  pull(lx) |> 
-  map(~str_split(., "_{2}")) |> 
-  map(unlist) |> 
-  map(~str_c(., collapse = "")) |> 
-  unlist() |> 
-  str_replace_all("NA", " ") |> 
-  str_replace_all("\\\\pc C\\:.+LinkedFiles\\/flora_photo\\/\\n", "") |> 
-  write_lines("flora-sfm-20241105.db")
+                         sep = ""))) |>
+  pull(lx) |>
+  map(~str_split(., "_{2}")) |>
+  map(unlist) |>
+  map(~str_c(., collapse = "")) |>
+  unlist() |>
+  str_replace_all("NA", " ") |>
+  str_replace_all("\\\\pc C\\:.+LinkedFiles\\/flora_photo\\/\\n", "") |>
+  write_lines("flora-sfm-20241119-to-test-image.db")
 
 ## FAUNAS ====
-fauna_df1 |> 
-  rowwise() |> 
-  mutate(lx = list(paste0("\\lx ", 
+fauna_df1 |>
+  rowwise() |>
+  mutate(lx = list(paste0("\\lx ",
                           ENGGANO,
                           "\n__\\cf ",
                           CROSSREF,
-                          # "\n__\\ph ", 
-                          # str_replace_all(str_replace_all(PHONEME, "\\/", ""), "ʔ", "ˀ"), 
+                          # "\n__\\ph ",
+                          # str_replace_all(str_replace_all(PHONEME, "\\/", ""), "ʔ", "ˀ"),
                           "\n__\\va ",
                           VARIANT,
-                          "\n__\\ps ", 
-                          POS, 
-                          "\n__\\gn ", 
-                          INDONESIAN, 
-                          "\n__\\ge ", 
+                          "\n__\\ps ",
+                          POS,
+                          "\n__\\gn ",
+                          INDONESIAN,
+                          "\n__\\ge ",
                           ENGLISH,
                           "\n__\\pc ",
                           paste0(linked_dir, "/fauna_photo/", name, sep = ""),
@@ -231,24 +439,24 @@ fauna_df1 |>
                           "\n__\\nt_ID ",
                           NOTES_ID,
                           "\n",
-                          sep = ""))) |> 
-  pull(lx) |> 
-  map(~str_split(., "_{2}")) |> 
-  map(unlist) |> 
-  map(~str_c(., collapse = "")) |> 
-  unlist() |> 
-  str_replace_all("NA", " ") |> 
-  str_replace_all("\\\\pc C\\:.+LinkedFiles\\/fauna_photo\\/\\n", "") |> 
-  write_lines("fauna-sfm-20241105.db")
-
-# Combined the data for Flora and Fauna for Pak Cok's team ==========
-flora_df1 |> 
-  select(category, NO, ENGGANO, POS, PHONEME, SENSE_ID, CROSSREF, INDONESIAN, ENGLISH, NOTES_EN, NOTES_ID, url, name) |> 
-  bind_rows(fauna_df1 |> 
-              select(category, NO, ENGGANO, POS, PHONEME, CROSSREF, INDONESIAN, ENGLISH, NOTES_EN, NOTES_ID, url, name))
-
-
-read_lines("flora-fauna-export-from-FLEx-20240928.db") |> 
-  str_extract_all("^\\\\[^ ]+?(?= )") |> 
-  unlist() |> 
-  unique()
+                          sep = ""))) |>
+  pull(lx) |>
+  map(~str_split(., "_{2}")) |>
+  map(unlist) |>
+  map(~str_c(., collapse = "")) |>
+  unlist() |>
+  str_replace_all("NA", " ") |>
+  str_replace_all("\\\\pc C\\:.+LinkedFiles\\/fauna_photo\\/\\n", "") |>
+  write_lines("fauna-sfm-20241119-to-test-image.db")
+# 
+# # Combined the data for Flora and Fauna for Pak Cok's team ==========
+# flora_df1 |> 
+#   select(category, NO, ENGGANO, POS, PHONEME, SENSE_ID, CROSSREF, INDONESIAN, ENGLISH, NOTES_EN, NOTES_ID, url, name) |> 
+#   bind_rows(fauna_df1 |> 
+#               select(category, NO, ENGGANO, POS, PHONEME, CROSSREF, INDONESIAN, ENGLISH, NOTES_EN, NOTES_ID, url, name))
+# 
+# 
+# read_lines("flora-fauna-export-from-FLEx-20240928.db") |> 
+#   str_extract_all("^\\\\[^ ]+?(?= )") |> 
+#   unlist() |> 
+#   unique()
