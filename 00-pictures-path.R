@@ -413,7 +413,7 @@ flora_df1 |>
   unlist() |>
   str_replace_all("NA", " ") |>
   str_replace_all("\\\\pc C\\:.+LinkedFiles\\/flora_photo\\/\\n", "") |>
-  write_lines("flora-sfm-20241119-to-test-image.db")
+  write_lines("flora-sfm-20241125-to-test-image.db")
 
 ## FAUNAS ====
 fauna_df1 |>
@@ -447,7 +447,7 @@ fauna_df1 |>
   unlist() |>
   str_replace_all("NA", " ") |>
   str_replace_all("\\\\pc C\\:.+LinkedFiles\\/fauna_photo\\/\\n", "") |>
-  write_lines("fauna-sfm-20241119-to-test-image.db")
+  write_lines("fauna-sfm-20241125-to-test-image.db")
 # 
 # # Combined the data for Flora and Fauna for Pak Cok's team ==========
 # flora_df1 |> 
