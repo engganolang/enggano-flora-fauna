@@ -1,7 +1,9 @@
 library(readxl)
+library(writexl)
 library(tidyverse)
 library(googledrive)
 library(googlesheets4)
+library(qlcData)
 
 # VERY IMPORTANT NOTES
 # everytime finishing exporting the spreadsheet into SFM, always check lexicons that have more than one meaning (polysemous) in the spreadsheet
@@ -140,7 +142,18 @@ all(str_detect(fauna_filenames_new, "\\(")) # check if "(...)" is in the file na
 
 # Read the G Sheet containing the lexicon of the flora and fauna =====
 ## FLORA spreadsheet =====
-flora_df <- read_sheet(flora_fauna_drive[flora_fauna_drive$name == "flora_with_picture", ][["id"]]) |> 
+flora_df_orig <- read_sheet(flora_fauna_drive[flora_fauna_drive$name == "flora_with_picture", ][["id"]])
+
+### prepare data for raw data archiving in: https://github.com/engganolang/flora-fauna-lexicon
+flora_df_orig_to_archive <- flora_df_orig |> 
+  mutate(across(where(is.character), ~replace_na(., ""))) |> ## remove NAs
+  mutate(across(matches("INCLUDE"), ~replace_na(., TRUE))) |>  ## fill the empty cells with TRUE
+  mutate(across(matches("PHONEME"), ~str_replace_all(., "[/]", ""))) |> 
+  mutate(across(matches("PHONEME$"), ~str_replace_all(., "\\:", "ː"))) |> 
+  mutate(across(matches("PHONEME$"), ~str_replace_all(., "y", "j"))) # replace 'y' with 'j' sounds
+
+### processing the flora data =====
+flora_df <- flora_df_orig |> 
   mutate(NO = as.character(NO)) |> 
   filter(is.na(INCLUDE)) |> 
   filter(!ENGLISH %in% c("jellyfish", 
@@ -164,17 +177,34 @@ flora_df1 <- flora_df |>
          category = "flora") |> 
   mutate(pc = if_else(name != "", paste0(linked_dir, "/flora_photo/", name, sep = ""), ""))
 
-## Check the number of absent photos
+### Check the number of absent photos =====
 flora_df1 |> filter(is.na(url))
 flora_df1 |> filter(!is.na(url))
-write_rds(flora_df1, "flora_df1.rds")
+write_rds(flora_df1, "output/flora_df1.rds")
+write_tsv(flora_df1, "output/flora_df1.tsv")
+write_xlsx(flora_df1, "output/flora_df1.xlsx")
+write_csv(flora_df1, "output/flora_df1.csv")
 
 ## Get the working directory of "flora_df1.rds"
-str_c(getwd(), "/", dir(pattern="flora_df1.rds"), sep = "")
+# str_c(getwd(), "/", dir(pattern="flora_df1.rds"), sep = "")
 # "G:/.shortcut-targets-by-id/1MO3Q9KZIODxlfPRyjLTtDUZuVkecFBp6/Enggano/enggano-dictionary/flora-fauna/flora_df1.rds"
+str_c(getwd(), "/output/flora_df1.rds", sep = "")
+# "G:/.shortcut-targets-by-id/1MO3Q9KZIODxlfPRyjLTtDUZuVkecFBp6/Enggano/enggano-dictionary/flora-fauna/output/flora_df1.rds"
 
 ## FAUNA spreadsheet =====
-fauna_df <- read_sheet(flora_fauna_drive[flora_fauna_drive$name == "fauna", ][["id"]]) |> 
+fauna_df_orig <- read_sheet(flora_fauna_drive[flora_fauna_drive$name == "fauna", ][["id"]])
+
+### prepare data for raw data archiving in: https://github.com/engganolang/flora-fauna-lexicon
+fauna_df_orig_to_archive <- fauna_df_orig |> 
+  select(-SENSE_ID) |> 
+  mutate(across(where(is.character), ~replace_na(., ""))) |> ## remove NAs
+  mutate(across(matches("INCLUDE"), ~replace_na(., TRUE))) |> ## fill the empty cells with TRUE
+  mutate(across(matches("(^IPA$|PHONEME$)"), ~str_replace_all(., "\\/", ""))) |> 
+  mutate(across(matches("(^IPA$|PHONEME$)"), ~str_replace_all(., "\\:", "ː"))) |> 
+  mutate(across(matches("(^IPA$|PHONEME$)"), ~str_replace_all(., "y", "j"))) # replace 'y' with 'j' sound
+
+### processing the fauna data =====
+fauna_df <- fauna_df_orig |> 
   mutate(NO = as.character(NO)) |> 
   mutate(NOTES_EN = replace_na(NOTES_EN, ""),
          NOTES_ID = replace_na(NOTES_ID, "")) |> 
@@ -196,16 +226,76 @@ fauna_df1 <- fauna_df |>
   mutate(pc = if_else(name != "", paste0(linked_dir, "/fauna_photo/", name, sep = ""), ""))
 fauna_df1
 
-## Check the number of absent photos
+### Check the number of absent photos =========
 fauna_df1 |> filter(is.na(url))
 fauna_df1 |> filter(is.na(IMAGE))
 fauna_df1 |> filter(!is.na(url))
 fauna_df1 |> filter(!is.na(IMAGE))
-write_rds(fauna_df1, "fauna_df1.rds")
+write_rds(fauna_df1, "output/fauna_df1.rds")
+write_tsv(fauna_df1, "output/fauna_df1.tsv")
+write_xlsx(fauna_df1, "output/fauna_df1.xlsx")
+write_csv(fauna_df1, "output/fauna_df1.csv")
 
 ## Get the working directory of "fauna_df1.rds"
-str_c(getwd(), "/", dir(pattern="fauna_df1.rds"), sep = "")
+# str_c(getwd(), "/", dir(pattern="fauna_df1.rds"), sep = "")
 # "G:/.shortcut-targets-by-id/1MO3Q9KZIODxlfPRyjLTtDUZuVkecFBp6/Enggano/enggano-dictionary/flora-fauna/fauna_df1.rds"
+str_c(getwd(), "/output/fauna_df1.rds", sep = "")
+# "G:/.shortcut-targets-by-id/1MO3Q9KZIODxlfPRyjLTtDUZuVkecFBp6/Enggano/enggano-dictionary/flora-fauna/output/fauna_df1.rds"
+
+# create orthography profile from the PHONEME =====
+# qlcData::write.profile(c(flora_df_orig_to_archive$PHONEME,
+#                          flora_df_orig_to_archive$VARIANT_PHONEME,
+#                          fauna_df_orig_to_archive$IPA,
+#                          fauna_df_orig_to_archive$VARIANT_PHONEME),
+#                        editing = TRUE,
+#                        file.out = "ortho/flora-fauna-skeleton.tsv")
+## segmentation =====
+### flora ====
+flora_df_orig_to_archive1 <- flora_df_orig_to_archive |> 
+  mutate(PHONEME_SEGMENT = qlcData::tokenize(PHONEME, 
+                                             profile = "ortho/flora-fauna-skeleton.tsv", 
+                                             method = "global", 
+                                             sep.replace = "#", 
+                                             normalize = "NFC")$strings[["tokenized"]]) |> 
+  mutate(VARIANT_PHONEME_SEGMENT = qlcData::tokenize(VARIANT_PHONEME, 
+                                                     profile = "ortho/flora-fauna-skeleton.tsv", 
+                                                     method = "global", 
+                                                     sep.replace = "#", 
+                                                     normalize = "NFC")$strings[["tokenized"]]) |> 
+  relocate(PHONEME_SEGMENT, .after = PHONEME) |> 
+  relocate(VARIANT_PHONEME_SEGMENT, .after = VARIANT_PHONEME)
+
+### fauna ====
+fauna_df_orig_to_archive1 <- fauna_df_orig_to_archive |> 
+  mutate(PHONEME_SEGMENT = qlcData::tokenize(IPA, 
+                                             profile = "ortho/flora-fauna-skeleton.tsv", 
+                                             method = "global", 
+                                             sep.replace = "#", 
+                                             normalize = "NFC")$strings[["tokenized"]]) |> 
+  mutate(VARIANT_PHONEME_SEGMENT = qlcData::tokenize(VARIANT_PHONEME, 
+                                                     profile = "ortho/flora-fauna-skeleton.tsv", 
+                                                     method = "global", 
+                                                     sep.replace = "#", 
+                                                     normalize = "NFC")$strings[["tokenized"]]) |> 
+  relocate(PHONEME_SEGMENT, .after = IPA) |> 
+  relocate(VARIANT_PHONEME_SEGMENT, .after = VARIANT_PHONEME) |> 
+  rename(PHONEME = IPA)
+
+# Copy the input-raw data to another directory for archiving ======
+
+write_tsv(flora_df_orig_to_archive1, "input-raw/flora_df_orig.tsv")
+write_xlsx(flora_df_orig_to_archive1, "input-raw/flora_df_orig.xlsx")
+write_csv(flora_df_orig_to_archive1, "input-raw/flora_df_orig.csv")
+write_rds(flora_df_orig_to_archive1, "input-raw/flora_df_orig.rds")
+
+write_tsv(fauna_df_orig_to_archive1, "input-raw/fauna_df_orig.tsv")
+write_xlsx(fauna_df_orig_to_archive1, "input-raw/fauna_df_orig.xlsx")
+write_csv(fauna_df_orig_to_archive1, "input-raw/fauna_df_orig.csv")
+write_rds(fauna_df_orig_to_archive1, "input-raw/fauna_df_orig.rds")
+
+fs::dir_copy("ortho", "C:/Users/GRajeg/OneDrive\ -\ Nexus365/Documents/flora-fauna-raw-data/ortho", overwrite = TRUE)
+fs::dir_copy("input-raw", "C:/Users/GRajeg/OneDrive\ -\ Nexus365/Documents/flora-fauna-raw-data/data-raw", overwrite = TRUE)
+
 
 # Turn into SFM file (NEW with sub-entries coded) ====
 ## FLORA ====
@@ -289,7 +379,7 @@ lx_flora_sfm <- bind_rows(lx_flora_single_sense, lx_flora_multisense) |>
   mutate(SFM = str_replace_all(SFM, "\\\\pc C\\:.+LinkedFiles\\/flora_photo\\/\\n", ""),
          SFM = str_replace_all(SFM, "_{2}", "")) |> 
   pull(SFM)
-lx_flora_sfm |> write_lines("flora-sfm-20241110.db")
+# lx_flora_sfm |> write_lines("output/flora-sfm-20241110.db")
 
 
 ## FAUNA ====
@@ -373,7 +463,7 @@ lx_fauna_sfm <- bind_rows(lx_fauna_single_sense, lx_fauna_multisense) |>
   mutate(SFM = str_replace_all(SFM, "\\\\pc C\\:.+LinkedFiles\\/fauna_photo\\/\\n", ""),
          SFM = str_replace_all(SFM, "_{2}", "")) |> 
   pull(SFM)
-lx_fauna_sfm |> write_lines("fauna-sfm-20241110.db")
+# lx_fauna_sfm |> write_lines("output/fauna-sfm-20241110.db")
 
 
 # Turn into SFM file (OLD) ====
@@ -413,7 +503,7 @@ flora_df1 |>
   unlist() |>
   str_replace_all("NA", " ") |>
   str_replace_all("\\\\pc C\\:.+LinkedFiles\\/flora_photo\\/\\n", "") |>
-  write_lines("flora-sfm-20241125-to-test-image.db")
+  write_lines("output/flora-sfm-20241125-to-test-image.db")
 
 ## FAUNAS ====
 fauna_df1 |>
@@ -447,7 +537,7 @@ fauna_df1 |>
   unlist() |>
   str_replace_all("NA", " ") |>
   str_replace_all("\\\\pc C\\:.+LinkedFiles\\/fauna_photo\\/\\n", "") |>
-  write_lines("fauna-sfm-20241125-to-test-image.db")
+  write_lines("output/fauna-sfm-20241125-to-test-image.db")
 # 
 # # Combined the data for Flora and Fauna for Pak Cok's team ==========
 # flora_df1 |> 
